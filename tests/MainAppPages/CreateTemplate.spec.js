@@ -703,4 +703,261 @@ await page.getByRole('button', { name: 'Next' }).click();
   await page.locator('.css-n9qnu9').click();
   await page.getByRole('option', { name: 'Andy amaya<andyamaya@nxglabs.' }).click();
   await page.locator('#selectSignerModal').getByRole('button', { name: 'Next' }).click();
-});});
+});
+test('Verify that user can add access code while sending document in bulk send', async ({ page }) => {
+  const commonSteps = new CommonSteps(page);
+
+  await commonSteps.navigateToBaseUrl();
+  await commonSteps.login();
+  await page.getByRole('button', { name: ' Templates' }).click();
+  await page.getByRole('menuitem', { name: 'Create template' }).click();
+  await page.locator('input[name="Name"]').fill('Access Code create template Test');
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page.locator('input[type="file"]').click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(path.join(__dirname, '../TestData/Samplepdfs/Sample_Test_doc_line.pdf'));
+  await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled({ timeout: 90000 }); 
+  await page.getByRole('button', { name: 'Next' }).click();
+await page.waitForLoadState("networkidle");
+
+await page.getByRole('button', { name: '+ Add role' }).click();
+    await page.locator('//form[@class="flex flex-col"]//input[@placeholder="Role 1"]').fill('HR');
+    await page.locator('//button[@type="submit" and @class="op-btn op-btn-primary" and text()="Add"]').click();
+    await commonSteps.dragAndDropSignatureWidget("signature", 600,200);
+
+  await page.getByTitle('Add access code').locator('i').click();
+  await expect(page.getByRole('heading')).toContainText('Access code');
+
+  await page.getByRole('textbox', { name: 'At least 6 digits' }).fill('989029');
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  await page.getByRole('button', { name: 'Next' }).click();
+  
+  await page.getByRole('button', { name: 'Bulk send' }).click();
+  await page.getByRole('textbox', { name: 'Enter Email...' }).click();
+  await page.getByRole('textbox', { name: 'Enter Email...' }).fill('opensign30@gmail.com');
+  await page.getByRole('button', { name: ' Send' }).click();
+  await expect(page.locator('#selectSignerModal')).toContainText('Message: Documents sent successfully.');
+});
+
+test('Verify that user can add access code while Signing Document In Kiosk Mode', async ({ page }) => {
+  const commonSteps = new CommonSteps(page);
+
+  await commonSteps.navigateToBaseUrl();
+  await commonSteps.login();
+
+  await page.getByRole('button', { name: ' Templates' }).click();
+  await page.getByRole('menuitem', { name: 'Create template' }).click();
+
+  await page.locator('input[name="Name"]').fill('Sample Test Doc Line');
+
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page.locator('input[type="file"]').click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(path.join(__dirname, '../TestData/Samplepdfs/Sample_Test_doc_line.pdf'));
+
+  await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled({ timeout: 90000 });
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  await page.waitForLoadState('networkidle');
+  await page.waitForURL(/\/template\/[^/?#]+/, { timeout: 90000 });
+  const templateId = page.url().match(/\/template\/([^/?#]+)/)?.[1];
+  expect(templateId).toBeTruthy();
+
+  await page.getByRole('button', { name: '+ Add role' }).click();
+  await page.locator('//form[@class="flex flex-col"]//input[@placeholder="Role 1"]').fill('HR');
+  await page.locator('//button[@type="submit" and text()="Add"]').click();
+
+  await commonSteps.dragAndDropSignatureWidget('signature', 600, 200);
+
+  await page.getByTitle('Add access code').locator('i').click();
+  await expect(page.getByRole('heading')).toContainText('Access code');
+
+  await page.getByRole('textbox', { name: 'At least 6 digits' }).fill('989029');
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  await page.getByRole('button', { name: '✕' }).click();
+
+  await expect(page.locator('#selectSignerModal')).toBeHidden({ timeout: 60000 });
+
+  const row = page.locator(`tr:has(label[aria-label="public-toggle-${templateId}"])`).first();
+
+  await expect(row).toBeVisible({ timeout: 60000 });
+  await row.scrollIntoViewIfNeeded();
+
+  await row.locator('[role="button"][title="Option"]').click();
+
+  const kioskModeOption = page.getByText('Kiosk Mode', { exact: true });
+  await expect(kioskModeOption).toBeVisible({ timeout: 10000 });
+
+  const [page1] = await Promise.all([
+    page.waitForEvent('popup'),
+    kioskModeOption.click(),
+  ]);
+  await page1.waitForLoadState('domcontentloaded');
+
+  await page1.getByRole('button', { name: 'Sign now' }).click();
+
+  await page1.getByRole('textbox', { name: 'Enter name' }).fill('Kelvension');
+  await page1.getByRole('textbox', { name: 'Enter email' }).fill('opensign30@gmail.com');
+  await page1.getByRole('button', { name: 'Submit' }).click();
+
+  await expect(page1.getByRole('heading')).toContainText('Verify access code');
+
+  await page1.getByRole('textbox', { name: 'At least 6 digits' }).fill('989029');
+  await page1.getByRole('button', { name: 'Verify' }).click();
+
+  await page1.getByRole('button', { name: 'I confirm & agree to continue' }).click();
+
+  const tourCloseButton = page1.locator('.reactour__popover [aria-label="Close"], .reactour__close').first();
+  if (await tourCloseButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+    await tourCloseButton.click();
+    await expect(page1.locator('.reactour__popover')).toBeHidden({ timeout: 10000 });
+  }
+
+  await page1.locator('//div[@id="container"]//div[text()="signature-1"]').click();
+
+  await page1.locator('#selectSignerModal canvas').click({ position: { x: 178, y: 62 } });
+  await page1.locator('#selectSignerModal canvas').click({ position: { x: 202, y: 83 } });
+
+  await page1.getByRole('button', { name: 'Done' }).click();
+  await page1.locator('#selectSignerModal').getByRole('button', { name: 'Finish' }).click();
+
+  await expect(page1.locator('#selectSignerModal')).toContainText('Congratulations');
+});
+
+test('Verify that user can add access code while sending document in create template', async ({ page }) => {
+  const commonSteps = new CommonSteps(page);
+
+  await commonSteps.navigateToBaseUrl();
+  await commonSteps.login();
+  await page.getByRole('button', { name: ' Templates' }).click();
+  await page.getByRole('menuitem', { name: 'Create template' }).click();
+  await page.locator('input[name="Name"]').fill('Access Code create template Test');
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page.locator('input[type="file"]').click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(path.join(__dirname, '../TestData/Samplepdfs/Sample_Test_doc_line.pdf'));
+  await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled({ timeout: 90000 }); 
+  await page.getByRole('button', { name: 'Next' }).click();
+await page.waitForLoadState("networkidle");
+
+await page.getByRole('button', { name: '+ Add role' }).click();
+    await page.locator('//form[@class="flex flex-col"]//input[@placeholder="Role 1"]').fill('HR');
+    await page.locator('//button[@type="submit" and @class="op-btn op-btn-primary" and text()="Add"]').click();
+    await commonSteps.dragAndDropSignatureWidget("signature", 600,200);
+
+  await page.getByTitle('Add access code').locator('i').click();
+  await expect(page.getByRole('heading')).toContainText('Access code');
+
+  await page.getByRole('textbox', { name: 'At least 6 digits' }).fill('989029');
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('button', { name: 'Use Template' }).click();
+  await page.locator('.css-n9qnu9').click();
+  await page.getByRole('option', { name: 'Andy amaya<andyamaya@nxglabs.' }).click();
+  await page.locator('#selectSignerModal').getByRole('button', { name: 'Next' }).click();
+
+  await page.locator('//span[text()="Copy link"]').click();
+  const copiedUrl = await page.locator('//p[@id="copyUrl"]').evaluate(el => el.textContent.trim());
+  const page1 = await page.context().newPage();
+  await page1.goto(copiedUrl);
+  await expect(page1.getByText('Verify access code')).toBeVisible({ timeout: 90000 });
+  
+  await page1.getByRole('textbox', { name: 'At least 6 digits' }).fill('989029');
+  await page1.getByRole('button', { name: 'Verify' }).click();
+  
+  const commonStepsPage1 = new CommonSteps(page1);
+  await commonStepsPage1.validateAndAcceptTerms();
+  await page1.waitForLoadState("networkidle");
+  await page1.waitForSelector('//div[@class=\'react-pdf__Document\']', { timeout: 90000 }); 
+  await commonStepsPage1.clickSignatureWidgetAndDraw();
+  
+  await commonStepsPage1.clickDoneButtonInSignerModal();
+  await commonStepsPage1.clickFinishButtonInSignerModal();
+  await expect(page1.locator('//h1[text()="The document has been signed successfully!"]')).toContainText('The document has been signed successfully!',{ timeout: 90000 });
+  
+});
+
+test('Verify that user can add access code while Signing Document In Public Mode', async ({ page }) => {
+  const commonSteps = new CommonSteps(page);
+
+  await commonSteps.navigateToBaseUrl();
+  await commonSteps.login();
+
+  await page.getByRole('button', { name: ' Templates' }).click();
+  await page.getByRole('menuitem', { name: 'Create template' }).click();
+
+  await page.locator('input[name="Name"]').fill('Sample Test Doc Line');
+
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page.locator('input[type="file"]').click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(path.join(__dirname, '../TestData/Samplepdfs/Sample_Test_doc_line.pdf'));
+
+  await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled({ timeout: 90000 });
+  await page.getByRole('button', { name: 'Next' }).click();
+
+  await page.waitForLoadState('networkidle');
+  await page.waitForURL(/\/template\/[^/?#]+/, { timeout: 90000 });
+  const templateId = page.url().match(/\/template\/([^/?#]+)/)?.[1];
+  expect(templateId).toBeTruthy();
+
+  await page.getByRole('button', { name: '+ Add role' }).click();
+  await page.locator('//form[@class="flex flex-col"]//input[@placeholder="Role 1"]').fill('HR');
+  await page.locator('//button[@type="submit" and text()="Add"]').click();
+
+  await commonSteps.dragAndDropSignatureWidget('signature', 600, 200);
+
+  await page.getByTitle('Add access code').locator('i').click();
+  await expect(page.getByRole('heading')).toContainText('Access code');
+
+  await page.getByRole('textbox', { name: 'At least 6 digits' }).fill('989029');
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  await page.getByRole('button', { name: 'Next' }).click();
+
+// Open Public URL
+await page.getByRole('button', { name: 'Copy public URL' }).click();
+await page.getByRole('button', { name: 'Yes' }).click();
+
+// Open public signing page
+const [page1] = await Promise.all([
+  page.waitForEvent('popup'),
+  page.getByRole('link', { name: /https:\/\/staging-app\./ }).click(),
+]); 
+
+  await page1.waitForLoadState('domcontentloaded');
+
+  await page1.getByRole('button', { name: 'Sign now' }).click();
+
+  await page1.getByRole('textbox', { name: 'Enter name' }).fill('Kelvension');
+  await page1.getByRole('textbox', { name: 'Enter email' }).fill('opensign30@gmail.com');
+  await page1.getByRole('button', { name: 'Submit' }).click();
+
+  await expect(page1.getByRole('heading')).toContainText('Verify access code');
+
+  await page1.getByRole('textbox', { name: 'At least 6 digits' }).fill('989029');
+  await page1.getByRole('button', { name: 'Verify' }).click();
+
+  await page1.getByRole('button', { name: 'I confirm & agree to continue' }).click();
+
+  const tourCloseButton = page1.locator('.reactour__popover [aria-label="Close"], .reactour__close').first();
+  if (await tourCloseButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+    await tourCloseButton.click();
+    await expect(page1.locator('.reactour__popover')).toBeHidden({ timeout: 10000 });
+  }
+
+  await page1.locator('//div[@id="container"]//div[text()="signature-1"]').click();
+
+  await page1.locator('#selectSignerModal canvas').click({ position: { x: 178, y: 62 } });
+  await page1.locator('#selectSignerModal canvas').click({ position: { x: 202, y: 83 } });
+
+  await page1.getByRole('button', { name: 'Done' }).click();
+  await page1.locator('#selectSignerModal').getByRole('button', { name: 'Finish' }).click();
+await expect(page1.getByText(/Congratulations/i)).toBeVisible({ timeout: 30000 });
+});
+});

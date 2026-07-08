@@ -4000,5 +4000,61 @@ page.on('dialog', async (dialog) => {
   await dialog.accept();
 });
 });
+test('Verify that user can add access code while sending request signature document.', async ({ page }) => {
+  const commonSteps = new CommonSteps(page);
+
+  await commonSteps.navigateToBaseUrl();
+  await commonSteps.login();
+
+  await page.getByRole('menuitem', { name: 'Request signatures' }).click();
+
+  await page.locator('input[name="Name"]').fill('Access Code Request Signature Test');
+  await expect(page.locator('input[name="Note"]')).toHaveValue(/.+/, { timeout: 90000 });
+
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await page.locator('input[type="file"]').click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles(path.join(__dirname, '../TestData/Samplepdfs/Sample-Joining-Letter.pdf'));
+
+await page.locator('div').filter({ hasText: /^Signers\*Select\.\.\.$/ }).locator('svg').click();
+  await page.getByRole('option', { name: 'Andy amaya<andyamaya@nxglabs.' }).waitFor({ timeout: 90000 });
+  await page.getByRole('option', { name: 'Andy amaya<andyamaya@nxglabs.' }).click();
+  await page.locator('input[name="Name"]').click();
+  await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled({ timeout: 90000 }); // Wait up to 90s
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.waitForLoadState("networkidle");
+  await page.waitForSelector('//div[@class=\'react-pdf__Document\']', { timeout: 90000 }); 
+  await commonSteps.dragAndDropSignatureWidget('signature', 600, 200)
+
+  await page.getByTitle('Add access code').locator('i').click();
+  await expect(page.getByRole('heading')).toContainText('Access code');
+
+  await page.getByRole('textbox', { name: 'At least 6 digits' }).fill('989029');
+  await page.getByRole('button', { name: 'Save' }).click();
+
+  await page.getByRole('button', { name: 'Next' }).click();
+  await expect(page.locator('#selectSignerModal')).toContainText(
+    'Are you sure you want to send out this document for signatures?'
+  );
+ await page.locator('//span[text()="Copy link"]').click();
+const copiedUrl = await page.locator('//p[@id="copyUrl"]').evaluate(el => el.textContent.trim());
+const page1 = await page.context().newPage();
+await page1.goto(copiedUrl);
+await expect(page1.getByText('Verify access code')).toBeVisible({ timeout: 90000 });
+
+await page1.getByRole('textbox', { name: 'At least 6 digits' }).fill('989029');
+await page1.getByRole('button', { name: 'Verify' }).click();
+
+const commonStepsPage1 = new CommonSteps(page1);
+await commonStepsPage1.validateAndAcceptTerms();
+await page1.waitForLoadState("networkidle");
+await page1.waitForSelector('//div[@class=\'react-pdf__Document\']', { timeout: 90000 }); 
+await commonStepsPage1.clickSignatureWidgetAndDraw();
+
+await commonStepsPage1.clickDoneButtonInSignerModal();
+await commonStepsPage1.clickFinishButtonInSignerModal();
+await expect(page1.locator('//h1[text()="The document has been signed successfully!"]')).toContainText('The document has been signed successfully!',{ timeout: 90000 });
+
+});
 });
 
